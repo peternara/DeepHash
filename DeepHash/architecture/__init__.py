@@ -222,6 +222,8 @@ def img_alexnet_layers(img, batch_size, output_dim, stage, model_weights, with_t
             fc8_t = fc8l
 
         def val_fn1():
+            # output_dim = 64 (axis=1) 개 [?, 64] -> 0 dim(=?) 10으로 나누어 쪼개서..
+            # 어자피 mean값을 구하는데..??
             concated = tf.concat([tf.expand_dims(i, 0)
                                   for i in tf.split(fc8_t, 10, 0)], 0)
             return tf.reduce_mean(concated, 0)
