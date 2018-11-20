@@ -23,15 +23,18 @@ class DTQ(object):
             # 0 for training, 1 for validation
             self.stage = tf.placeholder_with_default(tf.constant(0), [])
 
-        self.output_dim = config.output_dim
-        self.n_class = config.label_dim
+        self.output_dim = config.output_dim # 실제 centroid dimension 이지만, 이는 deep feature의 vector와 동일.
+        self.n_class    = config.label_dim
 
-        self.subspace_num = config.subspace
-        self.subcenter_num = config.subcenter
-        self.code_batch_size = config.code_batch_size
-        self.cq_lambda = config.cq_lambda
+        # sub-pace 기준되는 space를 subspace(=4)조각한다는 의미 ?
+        #    > config.subspace X onfig.subcenter가 실질적인 K ?
+        self.subspace_num  = config.subspace # default = 4 
+        self.subcenter_num = config.subcenter # default = 256 
+        
+        self.code_batch_size    = config.code_batch_size
+        self.cq_lambda          = config.cq_lambda
         self.max_iter_update_Cb = config.max_iter_update_Cb
-        self.max_iter_update_b = config.max_iter_update_b
+        self.max_iter_update_b  = config.max_iter_update_b
 
         self.batch_size = 3 * config.batch_size
         self.val_batch_size = config.val_batch_size
@@ -66,41 +69,43 @@ class DTQ(object):
         self.log_dir = config.log_dir
 
         # Setup session
-        config_proto = tf.ConfigProto()
+        config_proto                          = tf.ConfigProto()
         config_proto.gpu_options.allow_growth = True
-        config_proto.allow_soft_placement = True
-        self.sess = tf.Session(config=config_proto)
+        config_proto.allow_soft_placement     = True
+        self.sess                             = tf.Session(config=config_proto)
 
         # Create variables and placeholders
-        self.img = tf.placeholder(tf.float32, [None, 256, 256, 3])
+        self.img           = tf.placeholder(tf.float32, [None, 256, 256, 3]) # alexnet input
         self.model_weights = config.model_weights
+        # basenet - alexnet 
         self.img_last_layer, self.deep_param_img, self.train_layers, self.train_last_layer = self.load_model()
 
         with tf.name_scope('quantization'):
+            
             self.C = tf.Variable(tf.random_uniform(
                                     [self.subspace_num * self.subcenter_num, self.output_dim],
                                     minval=-1, maxval=1, dtype=tf.float32, name='centers'))
             self.deep_param_img['C'] = self.C
 
             self.img_output_all = tf.placeholder(tf.float32, [None, self.output_dim])
-            self.img_b_all = tf.placeholder(tf.float32, [None, self.subspace_num * self.subcenter_num])
+            self.img_b_all      = tf.placeholder(tf.float32, [None, self.subspace_num * self.subcenter_num])
 
-            self.b_img = tf.placeholder(tf.float32, [None, self.subspace_num * self.subcenter_num])
-            self.ICM_m = tf.placeholder(tf.int32, [])
-            self.ICM_b_m = tf.placeholder(tf.float32, [None, self.subcenter_num])
-            self.ICM_b_all = tf.placeholder(tf.float32, [None, self.subcenter_num * self.subspace_num])
-            self.ICM_X = tf.placeholder(tf.float32, [self.code_batch_size, self.output_dim])
-            self.ICM_C_m = tf.slice(self.C, [self.ICM_m * self.subcenter_num, 0], [self.subcenter_num, self.output_dim])
+            self.b_img          = tf.placeholder(tf.float32, [None, self.subspace_num * self.subcenter_num])
+            self.ICM_m          = tf.placeholder(tf.int32, [])
+            self.ICM_b_m        = tf.placeholder(tf.float32, [None, self.subcenter_num])
+            self.ICM_b_all      = tf.placeholder(tf.float32, [None, self.subcenter_num * self.subspace_num])
+            self.ICM_X          = tf.placeholder(tf.float32, [self.code_batch_size, self.output_dim])
+            self.ICM_C_m        = tf.slice(self.C, [self.ICM_m * self.subcenter_num, 0], [self.subcenter_num, self.output_dim])
             self.ICM_X_residual = self.ICM_X - tf.matmul(self.ICM_b_all, self.C) + tf.matmul(self.ICM_b_m, self.ICM_C_m)
-            ICM_X_expand = tf.expand_dims(self.ICM_X_residual, 1)
-            ICM_C_m_expand = tf.expand_dims(self.ICM_C_m, 0)
+            ICM_X_expand        = tf.expand_dims(self.ICM_X_residual, 1)
+            ICM_C_m_expand      = tf.expand_dims(self.ICM_C_m, 0)
 
-            ICM_Loss = tf.reduce_sum(tf.square(ICM_X_expand - ICM_C_m_expand), 2)  # N * M * D -> N * M
-            ICM_best_centers = tf.argmin(ICM_Loss, 1)
+            ICM_Loss                      = tf.reduce_sum(tf.square(ICM_X_expand - ICM_C_m_expand), 2)  # N * M * D -> N * M
+            ICM_best_centers              = tf.argmin(ICM_Loss, 1)
             self.ICM_best_centers_one_hot = tf.one_hot(ICM_best_centers, self.subcenter_num, dtype=tf.float32)
 
         self.global_step = tf.Variable(0, trainable=False)
-        self.train_op = self.apply_loss_function(self.global_step)
+        self.train_op    = self.apply_loss_function(self.global_step)
         self.sess.run(tf.global_variables_initializer())
         return
 
@@ -216,12 +221,13 @@ class DTQ(object):
             return opt.apply_gradients([(fcgrad*10, self.train_last_layer[0]),
                                         (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
 
+    # initial_centers    
     def initial_centers(self, img_output):
         C_init = np.zeros([self.subspace_num * self.subcenter_num, self.output_dim])
         all_output = img_output
         for i in range(self.subspace_num):
-            start = i*int(self.output_dim/self.subspace_num)
-            end = (i+1)*int(self.output_dim/self.subspace_num)
+            start  = i*int(self.output_dim/self.subspace_num)
+            end    = (i+1)*int(self.output_dim/self.subspace_num)
             to_fit = all_output[:, start:end]
             kmeans = MiniBatchKMeans(n_clusters=self.subcenter_num).fit(to_fit)
             C_init[i * self.subcenter_num: (i + 1) * self.subcenter_num, start:end] = kmeans.cluster_centers_
@@ -235,23 +241,23 @@ class DTQ(object):
             but all the C need to be replace with C^T :
             self.C = (hu * hu^T + hv * hv^T)^{-1} (hu^T * U + hv^T * V)
         '''
-        old_C_value = self.sess.run(self.C)
+        old_C_value     = self.sess.run(self.C)
 
-        h = self.img_b_all
-        U = self.img_output_all
-        smallResidual = tf.constant(np.eye(self.subcenter_num * self.subspace_num, dtype=np.float32) * 0.001)
-        Uh = tf.matmul(tf.transpose(h), U)
-        hh = tf.add(tf.matmul(tf.transpose(h), h), smallResidual)
+        h               = self.img_b_all
+        U               = self.img_output_all
+        smallResidual   = tf.constant(np.eye(self.subcenter_num * self.subspace_num, dtype=np.float32) * 0.001)
+        Uh              = tf.matmul(tf.transpose(h), U)
+        hh              = tf.add(tf.matmul(tf.transpose(h), h), smallResidual)
         compute_centers = tf.matmul(tf.matrix_inverse(hh), Uh)
 
         update_C = self.C.assign(compute_centers)
-        C_value = self.sess.run(update_C, feed_dict={
+        C_value  = self.sess.run(update_C, feed_dict={
             self.img_output_all: img_dataset.output,
             self.img_b_all: img_dataset.codes,
             })
 
-        C_sums = np.sum(np.square(C_value), axis=1)
-        C_zeros_ids = np.where(C_sums < 1e-8)
+        C_sums                  = np.sum(np.square(C_value), axis=1)
+        C_zeros_ids             = np.where(C_sums < 1e-8)
         C_value[C_zeros_ids, :] = old_C_value[C_zeros_ids, :]
         self.sess.run(self.C.assign(C_value))
 
