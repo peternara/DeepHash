@@ -8,6 +8,7 @@ class Dataset(object):
         self.n_samples = dataset.n_samples
         self._train = dataset.train
         self._output = np.zeros((self.n_samples, output_dim), dtype=np.float32)
+        # code_dim = K 수를 의미 = config.subspace * config.subcenter
         self._codes = np.zeros((self.n_samples, code_dim), dtype=np.float32)
         self._triplets = np.array([])
         self._trip_index_in_epoch = 0
