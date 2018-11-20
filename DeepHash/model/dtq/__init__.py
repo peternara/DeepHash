@@ -7,10 +7,10 @@ def train(train_img, database_img, query_img, config):
     img_query = Dataset(query_img, config.output_dim, config.subspace * config.subcenter)
     img_train = Dataset(train_img, config.output_dim, config.subspace * config.subcenter)
     
-    #print img_train.output[0] # all zero
+    #print img_train.output[0] # init- all zero
     #print img_train.output.shape # (5000, 64)
     #print img_train.output[0].shape #(64,)
-    #print img_train.codes[0]
+    #print img_train.codes[0] # init- all zero
     #print img_train.codes.shape # (5000, 1024) > 256x4 = 1024
     #print img_train.label[0] # [0 0 0 0 0 1 0 0 0 0]
     #print img_train.label.shape # (5000, 10)
