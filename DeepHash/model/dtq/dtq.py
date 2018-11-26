@@ -33,7 +33,7 @@ class DTQ(object):
         
         self.code_batch_size    = config.code_batch_size
         self.cq_lambda          = config.cq_lambda
-        self.max_iter_update_Cb = config.max_iter_update_Cb
+        self.max_iter_update_Cb = config.max_iter_update_Cb # =1 
         self.max_iter_update_b  = config.max_iter_update_b
 
         self.batch_size = 3 * config.batch_size
@@ -298,17 +298,17 @@ class DTQ(object):
         update codes in batch size
         '''
         total_batch = int(ceil(dataset.n_samples / float(batch_size)))
-        dataset.finish_epoch()
+        dataset.finish_epoch() # epoch 초기화 ?
 
         for i in range(total_batch):
             output_val, code_val = dataset.next_batch_output_codes(batch_size)
-            codes_val = self.update_codes_ICM(output_val, code_val)
+            codes_val            = self.update_codes_ICM(output_val, code_val)
             dataset.feed_batch_codes(batch_size, codes_val)
 
         dataset.finish_epoch()
 
     def update_codes_and_centers(self, img_dataset):
-        for i in range(self.max_iter_update_Cb):
+        for i in range(self.max_iter_update_Cb): # max_iter_update_Cb = 1
             self.update_codes_batch(img_dataset, self.code_batch_size)
             self.update_centers(img_dataset)
 
