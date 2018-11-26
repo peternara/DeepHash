@@ -226,7 +226,9 @@ class DTQ(object):
         C_init = np.zeros([self.subspace_num * self.subcenter_num, self.output_dim])
         all_output = img_output
         
-        # PQ와 유사하게 한 벡터를 sub-space(=4)로 나누어 k-means
+        # PQ와 유사하게 한 벡터를 sub-space(=4 등분)로 나누어 k-means
+        #   batch단위를 잊지 마시고
+        #   각 등분 벡터(sub-space)마다 각 centriod가 
         for i in range(self.subspace_num):
             start  = i*int(self.output_dim/self.subspace_num)
             end    = (i+1)*int(self.output_dim/self.subspace_num)
